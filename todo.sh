@@ -1,22 +1,28 @@
 #! /bin/bash
 
+# this modified version is to generate a txt file to be included by a webpage
+# everytime the todo list is updated
+# currently I'll just rewrite the file everytime, but later I may find ways to
+# update it by sed or awk
+# Sun Apr 10 18:46:06 HKT 2016
+
 # === HEAVY LIFTING ===
 shopt -s extglob extquote
 
 # NOTE:  Todo.sh requires the .todo/config configuration file to run.
 # Place the .todo/config file in your home directory or use the -d option for a custom location.
 
-[ -f VERSION-FILE ] && . VERSION-FILE || VERSION="@DEV_VERSION@"
+[ -f VERSION-FILE ] && . VERSION-FILE || VERSION="2.10"
 version() {
     cat <<-EndVersion
 		TODO.TXT Command Line Interface v$VERSION
 
 		First release: 5/11/2006
 		Original conception by: Gina Trapani (http://ginatrapani.org)
-		Contributors: https://github.com/ginatrapani/todo.txt-cli/network
-		License: GPL, https://www.gnu.org/copyleft/gpl.html
+		Contributors: http://github.com/ginatrapani/todo.txt-cli/network
+		License: GPL, http://www.gnu.org/copyleft/gpl.html
 		More information and mailing list at http://todotxt.com
-		Code repository: https://github.com/ginatrapani/todo.txt-cli/tree/master
+		Code repository: http://github.com/ginatrapani/todo.txt-cli/tree/master
 	EndVersion
     exit 1
 }
@@ -239,10 +245,10 @@ actionsHelp()
 		      Displays all the lines in SRC file located in the todo.txt directory,
 		      sorted by priority with line  numbers.  If TERM specified, lists
 		      all lines that contain TERM(s) in SRC file.  Hides all tasks that
-		      contain TERM(s) preceded by a minus sign (i.e. -TERM).  
+		      contain TERM(s) preceded by a minus sign (i.e. -TERM).
 		      Without any arguments, the names of all text files in the todo.txt
 		      directory are listed.
-		
+
 		    listpri [PRIORITIES] [TERM...]
 		    lsp [PRIORITIES] [TERM...]
 		      Displays all tasks prioritized PRIORITIES.
@@ -250,7 +256,7 @@ actionsHelp()
 		      If no PRIORITIES specified, lists all prioritized tasks.
 		      If TERM specified, lists only prioritized tasks that contain TERM(s).
 		      Hides all tasks that contain TERM(s) preceded by a minus sign
-		      (i.e. -TERM).  
+		      (i.e. -TERM).
 
 		    listproj [TERM...]
 		    lsprj [TERM...]
@@ -693,6 +699,7 @@ fi
 # === SANITY CHECKS (thanks Karl!) ===
 [ -r "$TODOTXT_CFG_FILE" ] || dieWithHelp "$1" "Fatal Error: Cannot read configuration file $TODOTXT_CFG_FILE"
 
+# read the configura file here !!!
 . "$TODOTXT_CFG_FILE"
 
 # === APPLY OVERRIDES
@@ -737,15 +744,20 @@ ACTION=${1:-$TODOTXT_DEFAULT_ACTION}
 [ -f "$DONE_FILE" -o -c "$DONE_FILE" ] || > "$DONE_FILE"
 [ -f "$REPORT_FILE" -o -c "$REPORT_FILE" ] || > "$REPORT_FILE"
 
+# but here is very urgly...need to find a way to recover later --Mon Apr 11 22:54:29 HKT 2016
+_make_txt_plain(){
+        for clr in ${!PRI_@}; do
+            export $clr=$NONE
+        done
+        PRI_X=$NONE
+        DEFAULT=$NONE
+        COLOR_DONE=$NONE
+        COLOR_PROJECT=$NONE
+        COLOR_CONTEXT=$NONE
+}
+
 if [ $TODOTXT_PLAIN = 1 ]; then
-    for clr in ${!PRI_@}; do
-        export $clr=$NONE
-    done
-    PRI_X=$NONE
-    DEFAULT=$NONE
-    COLOR_DONE=$NONE
-    COLOR_PROJECT=$NONE
-    COLOR_CONTEXT=$NONE
+    _make_txt_plain
 fi
 
 [[ "$HIDE_PROJECTS_SUBSTITUTION" ]] && COLOR_PROJECT="$NONE"
@@ -959,6 +971,16 @@ listWordsWithSigil()
     eval "$(filtercommand 'cat "${FILE[@]}"' '' "$@")" | grep -o "[^ ]*${sigil}[^ ]\\+" | grep "^$sigil" | sort -u
 }
 
+# update the specific txt file which is for displaying on a webpage
+# input: the path to the file
+print_to_txt(){
+    if [[ -n $TODOTXT_SAMPLE_OUTPUT ]]
+    then
+        _make_txt_plain
+        _list $TODO_FILE > $TODOTXT_SAMPLE_OUTPUT
+    fi
+}
+
 export -f cleaninput getPrefix getTodo getNewtodo shellquote filtercommand _list listWordsWithSigil getPadding _format die
 
 # == HANDLE ACTION ==
@@ -996,6 +1018,8 @@ case $action in
         input=$*
     fi
     _addto "$TODO_FILE" "$input"
+    # to print the todo list to some specific file
+    print_to_txt
     ;;
 
 "addm")
@@ -1008,7 +1032,7 @@ case $action in
         input=$*
     fi
 
-    # Set Internal Field Seperator as newline so we can 
+    # Set Internal Field Seperator as newline so we can
     # loop across multiple lines
     SAVEIFS=$IFS
     IFS=$'\n'
@@ -1018,6 +1042,7 @@ case $action in
         _addto "$TODO_FILE" "$line"
     done
     IFS=$SAVEIFS
+    print_to_txt
     ;;
 
 "addto" )
@@ -1033,6 +1058,7 @@ case $action in
     else
         die "TODO: Destination file $dest does not exist."
     fi
+    print_to_txt
     ;;
 
 "append" | "app" )
@@ -1056,10 +1082,11 @@ case $action in
         if [ $TODOTXT_VERBOSE -gt 0 ]; then
             getNewtodo "$item"
             echo "$item $newtodo"
-	fi
+    fi
     else
         die "TODO: Error appending task $item."
     fi
+    print_to_txt
     ;;
 
 "archive" )
@@ -1069,8 +1096,9 @@ case $action in
     grep "^x " "$TODO_FILE" >> "$DONE_FILE"
     sed -i.bak '/^x /d' "$TODO_FILE"
     if [ $TODOTXT_VERBOSE -gt 0 ]; then
-	echo "TODO: $TODO_FILE archived."
+    echo "TODO: $TODO_FILE archived."
     fi
+    print_to_txt
     ;;
 
 "del" | "rm" )
@@ -1120,6 +1148,7 @@ case $action in
             echo "$item $newtodo"
         fi
     fi
+    print_to_txt
     ;;
 
 "depri" | "dp" )
@@ -1132,16 +1161,16 @@ case $action in
     for item in ${*//,/ }; do
         getTodo "$item"
 
-	if [[ "$todo" = \(?\)\ * ]]; then
-	    sed -i.bak -e $item"s/^(.) //" "$TODO_FILE"
-	    if [ $TODOTXT_VERBOSE -gt 0 ]; then
-		getNewtodo "$item"
-		echo "$item $newtodo"
-		echo "TODO: $item deprioritized."
-	    fi
-	else
-	    echo "TODO: $item is not prioritized."
-	fi
+    if [[ "$todo" = \(?\)\ * ]]; then
+        sed -i.bak -e $item"s/^(.) //" "$TODO_FILE"
+        if [ $TODOTXT_VERBOSE -gt 0 ]; then
+        getNewtodo "$item"
+        echo "$item $newtodo"
+        echo "TODO: $item deprioritized."
+        fi
+    else
+        echo "TODO: $item is not prioritized."
+    fi
     done
     ;;
 
@@ -1166,7 +1195,7 @@ case $action in
                 getNewtodo "$item"
                 echo "$item $newtodo"
                 echo "TODO: $item marked as done."
-	    fi
+        fi
         else
             echo "TODO: $item is already marked done."
         fi
@@ -1177,6 +1206,7 @@ case $action in
         # action.
         "$TODO_FULL_SH" archive
     fi
+    print_to_txt
     ;;
 
 "help" )
@@ -1410,6 +1440,7 @@ note: PRIORITY must be anywhere from A to Z."
     else
         echo "TODO: $deduplicateNum duplicate task(s) removed"
     fi
+    print_to_txt
     ;;
 
 "listaddons" )
